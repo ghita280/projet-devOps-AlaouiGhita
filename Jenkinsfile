@@ -56,6 +56,9 @@ pipeline {
         }
         
         stage('Deploy') {
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
                 echo 'Déploiement de l\'application...'
                 sh '''
@@ -64,14 +67,42 @@ pipeline {
                 '''
             }
         }
+        
+        stage('Notify Slack') {
+            steps {
+                script {
+                    def status = currentBuild.result ?: 'SUCCESS'
+                    def color = status == 'SUCCESS' ? 'good' : 'danger'
+                    def message = status == 'SUCCESS' ? 
+                        " Pipeline exécuté avec succès!" : 
+                        " Le pipeline a échoué"
+                    
+                    slackSend(
+                        channel: '#jenkins-notifications',
+                        color: color,
+                        message: "${message}\nJob: ${env.JOB_NAME}\nBuild: ${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}"
+                    )
+                }
+            }
+        }
     }
     
     post {
         success {
             echo 'Pipeline exécuté avec succès!'
+            slackSend(
+                channel: '#jenkins-notifications',
+                color: 'good',
+                message: " Succès: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
+            )
         }
         failure {
             echo 'Le pipeline a échoué.'
+            slackSend(
+                channel: '#jenkins-notifications',
+                color: 'danger',
+                message: " Échec: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
+            )
         }
     }
 }
